@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Verify Code</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body class="bg-light">
+  <div class="container mt-5">
+    <div class="card shadow-lg p-4 mx-auto" style="max-width: 500px;">
+      <h2 class="text-center mb-4">Login</h2>
+      <form id="verifyOTPForm">
+        <div class="mb-3">
+          <label for="email" class="form-label">Email address</label>
+          <input type="email" class="form-control" name="email" id="email" required>
+        </div>
+        <div class="mb-3">
+          <label for="OTP" class="form-label">OTP</label>
+          <input type="text" class="form-control" name="OTP" id="OTP" required>
+        </div>
+        <button type="submit" class="btn btn-primary w-100">Send </button>
+      </form>
+
+      <div id="responseMessage" class="mt-2 text-center"></div>
+    </div>
+  </div>
+
+</body>
+
+<script>
+  document.getElementById('verifyOTPForm').addEventListener('submit',async(e)=>{
+  e.preventDefault();
+  
+  const email = document.getElementById('email').value;
+  const OTP = document.getElementById('OTP').value;
+  const response = await fetch('/api/auth/verifyOTP',{
+    method:"POST",
+    headers:{
+      'Content-Type':'Application/json'
+    },
+    body: JSON.stringify({email,OTP})
+  })
+  const data = await response.json();
+  if(response.ok){
+    alert('verified');
+    window.location.href = '/home';
+      }else{
+    alert('err')
+  }
+
+  })
+
+</script>
+</html>
