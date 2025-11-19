@@ -2,7 +2,7 @@ const express = require('express')
 const cookieParser = require('cookie-parser');
 const bodyParser = require("body-parser");
 const connectToDB = require('./db');
-
+require('dotenv').config();
 const createStudentTable = require('./models/Student.js')
 const createStaffTable = require('./models/Staff.js')
 const createCourseTable = require('./models/Course.js')
@@ -21,7 +21,7 @@ app.use(express.static("public"));
 app.use(bodyParser.urlencoded({ extended: true }));
 
 
-const PORT = process.env.PORT || 3000 ;
+const PORT = process.env.PORT || 3001 ;
 (async () => {
   try {
     const db = await connectToDB();
