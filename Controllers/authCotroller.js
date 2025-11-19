@@ -114,7 +114,7 @@ exports.login = async (req,res)=>{
 
             accessToken = jwt.sign({
             userId : result.recordset[0].stu_id,
-            username :result.recordset[0].stu_name,
+            username :isStudent? result.recordset[0].stu_name: result.recordset[0].staff_name ,
             role : result.recordset[0].role,
             isVerified:result.recordset[0].isVerified
         },jwt_secret_key,{
