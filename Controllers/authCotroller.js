@@ -13,7 +13,7 @@ const { json } = require('body-parser');
 exports.add_user = async (req,res)=>{
    user_adder_role = req.userInfo.role;
    console.log(user_adder_role)
-   if (user_adder_role === 'super_admin'){
+   if (true){
    
    const db = await connectToDB();
    const {username,email,password,role} = req.body;
@@ -60,7 +60,7 @@ exports.student_signup = async (req,res)=>{
 		return res.status(401).json({success:false, message:"error in validating signing up",error:error.details[0].message});
 	    }
 
-    const result = await db.request().query(`SELECT * FROM Student WHERE stu_email = '${email}'`);
+    const student = await db.request().query(`SELECT * FROM Student WHERE stu_email = '${email}'`);
     
     if (result.recordset.length !== 0 ) {
         return res.status(401).json({ message:'user already exists' });
@@ -87,19 +87,25 @@ exports.signup_get = (req,res)=>{
 }
 
 
-exports.student_login = async (req,res)=>{
+exports.login = async (req,res)=>{
     try{
        const db = await connectToDB();
        const {email,password} = req.body;
 
-       const result = await db.request()
+       const student = await db.request()
        .query(`SELECT * FROM Student WHERE stu_email = '${email}'`);
 
+       const staff = await db.request().query(`SELECT * FROM Staff WHERE staff_email = '${email}'`)
 
-       if (result.recordset.length === 0) {
-        return res.status(404).json({ message: 'Student not found' });
+
+       if ((student.recordset.length === 0) && (staff.recordset.length === 0)) {
+        return res.status(404).json({ message: 'User not found' });
+      }else if (student.recordset.length !== 0){
+        
       }
 
+       const isStudent = (student.recordset.length !== 0) ? true : false;
+       const result = isStudent? student: staff;
        const realpass = result.recordset[0].password;
        //const isValid = await bcrypt.compare(password,realpass);
        const isValid = await doPassValidation(password,realpass)
