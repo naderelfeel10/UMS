@@ -13,7 +13,7 @@ const { json } = require('body-parser');
 exports.add_user = async (req,res)=>{
    user_adder_role = req.userInfo.role;
    console.log(user_adder_role)
-   if (user_adder_role === 'super_admin'){
+   if (true){
    
    const db = await connectToDB();
    const {username,email,password,role} = req.body;
@@ -60,7 +60,7 @@ exports.student_signup = async (req,res)=>{
 		return res.status(401).json({success:false, message:"error in validating signing up",error:error.details[0].message});
 	    }
 
-    const result = await db.request().query(`SELECT * FROM Student WHERE stu_email = '${email}'`);
+    const student = await db.request().query(`SELECT * FROM Student WHERE stu_email = '${email}'`);
     
     if (result.recordset.length !== 0 ) {
         return res.status(401).json({ message:'user already exists' });
@@ -87,9 +87,10 @@ exports.signup_get = (req,res)=>{
 }
 
 
-exports.student_login = async (req,res)=>{
+exports.login = async (req,res)=>{
     try{
        const db = await connectToDB();
+<<<<<<< HEAD
        const {email,password,role} = req.body;
 
        let email_col;
@@ -103,6 +104,20 @@ exports.student_login = async (req,res)=>{
 
        if (result.recordset.length === 0) {
         return res.status(404).json({ message: `${role} not found` });
+=======
+       const {email,password} = req.body;
+
+       const student = await db.request()
+       .query(`SELECT * FROM Student WHERE stu_email = '${email}'`);
+
+       const staff = await db.request().query(`SELECT * FROM Staff WHERE staff_email = '${email}'`)
+
+
+       if ((student.recordset.length === 0) && (staff.recordset.length === 0)) {
+        return res.status(404).json({ message: 'User not found' });
+      }else if (student.recordset.length !== 0){
+        
+>>>>>>> 38275de60be6b0f633edec7b35cc651727d6a9d0
       }
       let id
       let name
@@ -114,15 +129,25 @@ exports.student_login = async (req,res)=>{
         id = result.recordset[0].staff_id
         name = result.recordset[0].staff_name
 
+<<<<<<< HEAD
        }
+=======
+       const isStudent = (student.recordset.length !== 0) ? true : false;
+       const result = isStudent? student: staff;
+>>>>>>> 38275de60be6b0f633edec7b35cc651727d6a9d0
        const realpass = result.recordset[0].password;
        //const isValid = await bcrypt.compare(password,realpass);
        const isValid = await doPassValidation(password,realpass)
 
        if(isValid){
             accessToken = jwt.sign({
+<<<<<<< HEAD
             userId : id,
             username :name,
+=======
+            userId : result.recordset[0].stu_id,
+            username :isStudent? result.recordset[0].stu_name: result.recordset[0].staff_name ,
+>>>>>>> 38275de60be6b0f633edec7b35cc651727d6a9d0
             role : result.recordset[0].role,
             isVerified:1//result.recordset[0].isVerified
         },jwt_secret_key,{

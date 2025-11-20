@@ -2,12 +2,19 @@ const express = require('express')
 const cookieParser = require('cookie-parser');
 const bodyParser = require("body-parser");
 const connectToDB = require('./db');
+<<<<<<< HEAD
 
 const StudentTable = require('./models/Student.js')
 const StaffTable = require('./models/Staff.js')
 const CourseTable = require('./models/Course.js')
 const QuizTable = require('./models/Quiz.js')
 
+=======
+require('dotenv').config();
+const createStudentTable = require('./models/Student.js')
+const createStaffTable = require('./models/Staff.js')
+const createCourseTable = require('./models/Course.js')
+>>>>>>> 38275de60be6b0f633edec7b35cc651727d6a9d0
 
 
 const { authMiddleWare } = require('./middlewares/auth-middleware.js');
@@ -31,7 +38,7 @@ app.use(express.static("public"));
 app.use(bodyParser.urlencoded({ extended: true }));
 
 
-const PORT = process.env.PORT || 3000 ;
+const PORT = process.env.PORT || 3001 ;
 (async () => {
   try {
     const db = await connectToDB();

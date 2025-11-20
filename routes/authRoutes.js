@@ -11,10 +11,10 @@ const middleware = require("../middlewares/auth-middleware");
 
 router.post('/addUser',middleware.authMiddleWare,authController.add_user);
 
-router.post('/login',authController.student_login);
+router.post('/login',authController.login);
 router.get("/login",authController.login_get);
 
-router.post('/login',authController.student_login);
+router.post('/login',authController.login);
 router.get("/login",authController.login_get);
 
 router.post('/logout', (req, res) => {
