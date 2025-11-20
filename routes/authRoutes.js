@@ -6,8 +6,8 @@ const router = express.Router();
 const middleware = require("../middlewares/auth-middleware");
 
 
-router.post('/signup',authController.student_signup);
-router.get("/signup",authController.signup_get);
+//router.post('/signup',authController.student_signup);
+//router.get("/signup",authController.signup_get);
 
 router.post('/addUser',middleware.authMiddleWare,authController.add_user);
 

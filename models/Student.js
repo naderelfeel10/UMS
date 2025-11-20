@@ -21,4 +21,4 @@ async function createStudentTable() {
     await db.request().query(q);   
 }
 
-module.exports = createStudentTable;
+module.exports = {createStudentTable};

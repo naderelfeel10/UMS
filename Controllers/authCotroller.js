@@ -90,27 +90,41 @@ exports.signup_get = (req,res)=>{
 exports.student_login = async (req,res)=>{
     try{
        const db = await connectToDB();
-       const {email,password} = req.body;
+       const {email,password,role} = req.body;
 
-       const result = await db.request()
-       .query(`SELECT * FROM Student WHERE stu_email = '${email}'`);
-
+       let email_col;
+       if(role === 'Student'){
+        email_col = "stu_email";
+       }
+       else if (role === 'Staff'){
+        email_col = "staff_email";
+       }
+       const result = await db.request().query(`SELECT * FROM ${role} WHERE ${email_col} = '${email}'`);
 
        if (result.recordset.length === 0) {
-        return res.status(404).json({ message: 'Student not found' });
+        return res.status(404).json({ message: `${role} not found` });
       }
+      let id
+      let name
+       if (role === 'Student'){
+        id = result.recordset[0].stu_id
+        name = result.recordset[0].stu_name
+       }
+       else if(role === 'Staff'){
+        id = result.recordset[0].staff_id
+        name = result.recordset[0].staff_name
 
+       }
        const realpass = result.recordset[0].password;
        //const isValid = await bcrypt.compare(password,realpass);
        const isValid = await doPassValidation(password,realpass)
 
        if(isValid){
-
             accessToken = jwt.sign({
-            userId : result.recordset[0].stu_id,
-            username :result.recordset[0].stu_name,
+            userId : id,
+            username :name,
             role : result.recordset[0].role,
-            isVerified:result.recordset[0].isVerified
+            isVerified:1//result.recordset[0].isVerified
         },jwt_secret_key,{
             expiresIn : '6h'
         });
@@ -215,6 +229,9 @@ console.log(now,expiresAt)
     }
 }
 
+
+
 exports.verifyCodePage = async (req,res)=>{
   res.render('verifyAcc');
 }
+

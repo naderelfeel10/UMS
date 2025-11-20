@@ -3,13 +3,23 @@ const cookieParser = require('cookie-parser');
 const bodyParser = require("body-parser");
 const connectToDB = require('./db');
 
-const createStudentTable = require('./models/Student.js')
-const createStaffTable = require('./models/Staff.js')
-const createCourseTable = require('./models/Course.js')
+const StudentTable = require('./models/Student.js')
+const StaffTable = require('./models/Staff.js')
+const CourseTable = require('./models/Course.js')
+const QuizTable = require('./models/Quiz.js')
 
 
-const authrouter = require('./routes/authRoutes');
+
 const { authMiddleWare } = require('./middlewares/auth-middleware.js');
+
+
+// routes : 
+const authrouter = require('./routes/authRoutes');
+const courserouter = require('./routes/courseRoute.js');
+const quizrouter = require('./routes/quizRoute.js');
+const staffrouter = require('./routes/staffRoute.js');
+
+
 
 const app = express();
 
@@ -25,9 +35,19 @@ const PORT = process.env.PORT || 3000 ;
 (async () => {
   try {
     const db = await connectToDB();
-    await createStudentTable();
-    await createStaffTable();
-    await createCourseTable();
+    await StudentTable.createStudentTable();
+    await StaffTable.createStaffTable();
+    await StaffTable.createStaffCoursesTable();
+
+    await CourseTable.createCourseTable();
+    await CourseTable.registerCourseTable();
+    await CourseTable.CourseContentTable();
+
+    await QuizTable.createQuizTable();
+    await QuizTable.createGradeQuizTable();
+
+
+
 
   } catch (err) {
     console.error(' Could not start server due to DB error',err);
@@ -36,6 +56,10 @@ const PORT = process.env.PORT || 3000 ;
 
 
 app.use('/api/auth',authrouter)
+app.use('/course_management',courserouter)
+app.use('/course_management/quizzes',quizrouter)
+app.use('/Staff_management', staffrouter)
+
 
 app.get('/home',authMiddleWare,(req,res)=>{
   username = req.userInfo.username
