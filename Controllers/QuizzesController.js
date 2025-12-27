@@ -92,11 +92,13 @@ exports.getcourseQuizGet = (req,res)=>{
 exports.gradeQuiz = async(req, res) => {
     if(req.userInfo.role != 'admin' && req.userInfo.role != 'Doctor' && req.userInfo.role != 'TA')
     {
-        return res.status(401).json({sucess:false, message:"Unauthorized, You have to be admin or doctor to edit courses"})
+        return res.status(401).json({success: false, message: "Unauthorized, You have to be admin, doctor, or TA to grade quizzes"})
     }
+    
     try {
         const db = await connectToDB();
         const { quiz_id, stu_id, quiz_grade } = req.body;
+        const sql = require('mssql');
 
         // Log the received data for debugging
         console.log("Received data:", { quiz_id, stu_id, quiz_grade });
@@ -109,22 +111,65 @@ exports.gradeQuiz = async(req, res) => {
             });
         }
 
+        // Validate and convert letter grade to numeric (0-10)
+        let numericGrade;
+        const gradeUpper = quiz_grade.toUpperCase();
+        
+        // Simple grade conversion (no + or -)
+        switch(gradeUpper) {
+            case 'A':
+                numericGrade = 10;
+                break;
+            case 'B':
+                numericGrade = 8;
+                break;
+            case 'C':
+                numericGrade = 6;
+                break;
+            case 'D':
+                numericGrade = 4;
+                break;
+            case 'F':
+                numericGrade = 0;
+                break;
+            default:
+                // Try to parse as number if it's already numeric
+                const parsedGrade = parseFloat(quiz_grade);
+                if (!isNaN(parsedGrade) && parsedGrade >= 0 && parsedGrade <= 10) {
+                    numericGrade = parsedGrade;
+                } else {
+                    return res.status(400).json({ 
+                        success: false, 
+                        message: "Invalid grade format. Use A, B, C, D, F or numeric 0-10" 
+                    });
+                }
+        }
+
+        console.log(`Converted grade: ${quiz_grade} -> ${numericGrade}`);
+
         const request = db.request();
         request.input('quiz_id', sql.Int, quiz_id);
         request.input('stu_id', sql.Int, stu_id);
-        request.input('quiz_grade', sql.NVarChar, quiz_grade);
+        request.input('quiz_grade_letter', sql.VarChar(5), gradeUpper); // Store original letter grade
+        request.input('quiz_grade_numeric', sql.Decimal(4,2), numericGrade); // Store numeric grade
 
-        // Execute the query
+        // Execute the query - updated to store both letter and numeric grades
         const result = await request.query(`
             INSERT INTO GradeQuiz(quiz_id, stu_id, quiz_grade) 
-            VALUES (@quiz_id, @stu_id, @quiz_grade);
+            VALUES (@quiz_id, @stu_id, @quiz_grade_numeric);
         `);
 
         console.log("Insert result:", result);
 
         return res.status(201).json({ 
             success: true, 
-            message: "Quiz graded successfully" 
+            message: "Quiz graded successfully",
+            data: {
+                quiz_id,
+                stu_id,
+                letter_grade: gradeUpper,
+                numeric_grade: numericGrade
+            }
         });
 
     } catch (error) {
@@ -305,28 +350,85 @@ exports.getCalenderQuizes = async(req,res)=>{
         const db = await connectToDB();
         const stu_id = req.userInfo.userId;
 
-        const stu_check = await db.request();
-        const stu_result = await stu_check.input('stu_id',sql.Int, stu_id)
-        .query(`select stu_name from Student where stu_id= @stu_id;`);
+        // Check if student exists
+        const stu_check = await db.request()
+            .input('stu_id', sql.Int, stu_id)
+            .query(`SELECT stu_name FROM Student WHERE stu_id = @stu_id;`);
 
-        if(stu_result.recordset.length == 0){
+        if(stu_check.recordset.length == 0){
             return res.status(404).json({success:false, message:"student not found !!"})
         }
 
         const request = await db.request();
-        const result = await request.input('stu_id', sql.Int , stu_id)
-        .query(`select c.course_name,q.quiz_id, q.quiz_title, q.google_form_url from RegisteredCourses rc 
-            join Course c on c.course_id = rc.course_id 
-            join Quiz q on q.course_id = rc.course_id where stu_id=@stu_id ;`);
+        const result = await request.input('stu_id', sql.Int, stu_id)
+            .query(`
+                SELECT 
+                    c.course_name,
+                    q.quiz_id, 
+                    q.quiz_title, 
+                    q.google_form_url,
+                    ISNULL((
+                        SELECT qav.value_datetime 
+                        FROM QuizAttributeValue qav
+                        JOIN QuizAttribute qa ON qa.attribute_id = qav.attribute_id
+                        WHERE qav.quiz_id = q.quiz_id 
+                            AND qav.stu_id = 0
+                            AND qa.attribute_name = 'open_date'
+                    ), NULL) as open_date,
+                    ISNULL((
+                        SELECT qav.value_datetime 
+                        FROM QuizAttributeValue qav
+                        JOIN QuizAttribute qa ON qa.attribute_id = qav.attribute_id
+                        WHERE qav.quiz_id = q.quiz_id 
+                            AND qav.stu_id = 0
+                            AND qa.attribute_name = 'close_date'
+                    ), NULL) as close_date,
+                    ISNULL((
+                        SELECT qav.value_boolean 
+                        FROM QuizAttributeValue qav
+                        JOIN QuizAttribute qa ON qa.attribute_id = qav.attribute_id
+                        WHERE qav.quiz_id = q.quiz_id 
+                            AND qav.stu_id = 0
+                            AND qa.attribute_name = 'is_visible'
+                    ), 0) as is_visible
+                FROM RegisteredCourses rc 
+                JOIN Course c ON c.course_id = rc.course_id 
+                JOIN Quiz q ON q.course_id = rc.course_id 
+                WHERE rc.stu_id = @stu_id 
+                ORDER BY 
+                    CASE 
+                        WHEN ISNULL((
+                            SELECT qav.value_datetime 
+                            FROM QuizAttributeValue qav
+                            JOIN QuizAttribute qa ON qa.attribute_id = qav.attribute_id
+                            WHERE qav.quiz_id = q.quiz_id 
+                                AND qav.stu_id = 0
+                                AND qa.attribute_name = 'open_date'
+                        ), NULL) IS NULL THEN 1
+                        ELSE 0
+                    END,
+                    ISNULL((
+                        SELECT qav.value_datetime 
+                        FROM QuizAttributeValue qav
+                        JOIN QuizAttribute qa ON qa.attribute_id = qav.attribute_id
+                        WHERE qav.quiz_id = q.quiz_id 
+                            AND qav.stu_id = 0
+                            AND qa.attribute_name = 'open_date'
+                    ), NULL) ASC,
+                    q.quiz_title;
+            `);
         
-        console.log(result.recordset)
-        return res.status(200).json({success:true, result:result.recordset})
+        console.log(result.recordset);
+        return res.status(200).json({
+            success: true, 
+            result: result.recordset
+        });
 
-
-
-     }catch(err){
-        console.log(err)
-        return res.status(500).json({success:false, message:"error while getting your quizes calender"})
+    } catch(err) {
+        console.error(err);
+        return res.status(500).json({
+            success: false, 
+            message: "Error while getting your quizzes calendar"
+        });
     }
-
 }

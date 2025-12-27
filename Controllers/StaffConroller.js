@@ -1,13 +1,12 @@
-const connectToDB = require('../db')
-const sql = require('mssql/msnodesqlv8')
+const connectToDB = require("../db");
+const sql = require("mssql/msnodesqlv8");
 
-
-exports.AllStaffInfo = async(req,res)=>{
-    try{
+exports.AllStaffInfo = async (req, res) => {
+  try {
     const db = await connectToDB();
 
     //const result = await db.request().query(`select s.staff_id, s.staff_name, s.role, s.phone ,
-    //   s.contact_info, s.profile_link, s.office_hours , sc.course_id , c.course_name , c.credit_hours from Staff s join StaffCourse sc 
+    //   s.contact_info, s.profile_link, s.office_hours , sc.course_id , c.course_name , c.credit_hours from Staff s join StaffCourse sc
     // on s.staff_id = sc.staff_id join Course c on sc.course_id = c.course_id ;`)
 
     const result = await db.request().query(`SELECT 
@@ -30,30 +29,32 @@ exports.AllStaffInfo = async(req,res)=>{
                     ) AS courses
                 FROM Staff s`);
 
-        res.status(201).json({success:true, message:"Staff Info", result : result.recordset})
+    res
+      .status(201)
+      .json({ success: true, message: "Staff Info", result: result.recordset });
+  } catch (err) {
+    console.log(err);
+    res
+      .status(500)
+      .json({ success: false, message: "error while getting staff info" });
+  }
+};
 
-    }catch(err){
-        console.log(err);
-        res.status(500).json({success:false, message:"error while getting staff info"})
-    }    
-
-}
-
-
-
-exports.getSingleStaff = async(req,res)=>{
-    try{
+exports.getSingleStaff = async (req, res) => {
+  try {
     const db = await connectToDB();
-
-    //const result = await db.request().query(`select s.staff_id, s.staff_name, s.role, s.phone ,
-      //   s.contact_info, s.profile_link, s.office_hours , sc.course_id , c.course_name , c.credit_hours from Staff s join StaffCourse sc 
-        // on s.staff_id = sc.staff_id join Course c on sc.course_id = c.course_id ;`)
-
-
     const { staff_id } = req.params;
 
+    // First, ensure staff_id is a valid integer
+    const staffIdNum = parseInt(staff_id);
+    if (isNaN(staffIdNum)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid staff ID format" 
+      });
+    }
 
-    
+    // Modified query - CAST all values to VARCHAR in the CASE statement
     const q = `SELECT 
                     s.staff_id,
                     s.staff_name,
@@ -62,6 +63,7 @@ exports.getSingleStaff = async(req,res)=>{
                     s.contact_info,
                     s.profile_link,
                     s.office_hours,
+                    s.staff_email,
                     (
                         SELECT 
                             c.course_id,
@@ -71,90 +73,182 @@ exports.getSingleStaff = async(req,res)=>{
                         JOIN Course c ON sc.course_id = c.course_id
                         WHERE sc.staff_id = s.staff_id
                         FOR JSON PATH
-                    )  AS courses
-                FROM Staff s where staff_id = @staff_id`;
+                    ) AS courses,
+                    (
+                        SELECT 
+                            sa.attribute_name,
+                            CAST(
+                                CASE 
+                                    WHEN sa.data_type = 'string' THEN sav.value_string
+                                    WHEN sa.data_type = 'integer' THEN CAST(sav.value_int AS VARCHAR(50))
+                                    WHEN sa.data_type = 'decimal' THEN CAST(sav.value_decimal AS VARCHAR(50))
+                                    WHEN sa.data_type = 'boolean' THEN CAST(sav.value_boolean AS VARCHAR(50))
+                                    ELSE NULL
+                                END AS VARCHAR(MAX)
+                            ) AS value
+                        FROM StaffAttributeValues sav
+                        JOIN StaffAttributes sa ON sav.attribute_id = sa.attribute_id
+                        WHERE sav.staff_id = s.staff_id
+                        FOR JSON PATH
+                    ) AS attributes_json
+                FROM Staff s 
+                WHERE s.staff_id = @staff_id`;
 
     const request = await db.request();
-    request.input('staff_id',sql.Int, staff_id)
+    request.input("staff_id", sql.Int, staffIdNum);
     const result = await request.query(q);
 
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Staff not found" 
+      });
+    }
 
-    res.status(201).json({success:true, message:`Staff ${result.recordset[0].staff_name} Info`, result : result.recordset[0]})
+    const staff = result.recordset[0];
+    
+    // Parse JSON strings if they exist
+    if (staff.courses) {
+      try {
+        staff.courses = JSON.parse(staff.courses);
+      } catch (parseError) {
+        console.log("Error parsing courses JSON:", parseError);
+        staff.courses = [];
+      }
+    } else {
+      staff.courses = [];
+    }
+    
+    // Convert attributes array to object format
+    let attributes = {};
+    if (staff.attributes_json) {
+      try {
+        const attributesArray = JSON.parse(staff.attributes_json);
+        attributesArray.forEach(attr => {
+          // Convert back to appropriate types based on your needs
+          if (attr.value !== null && attr.value !== undefined) {
+            // You might want to store the original data_type to convert back properly
+            attributes[attr.attribute_name] = attr.value;
+          }
+        });
+      } catch (parseError) {
+        console.log("Error parsing attributes JSON:", parseError);
+      }
+    }
+    staff.attributes = attributes;
+    
+    // Remove the temporary JSON field
+    delete staff.attributes_json;
 
-    }catch(err){
-        console.log(err);
-        res.status(500).json({success:false, message:"error while getting staff info"})
-    }    
-
-}
-
+    res.status(200).json({
+      success: true,
+      message: `Staff ${staff.staff_name} Info`,
+      result: staff,
+    });
+  } catch (err) {
+    console.log("Error in getSingleStaff:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Error while getting staff info",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+};
 
 exports.editStaff = async (req, res) => {
-    if(req.userInfo.role != 'admin')
-    {
-        return res.status(404).json({sucess:false, message:"Unauthorized, You have to be admin to assign courses"})
+  if (req.userInfo.role != "admin") {
+    return res
+      .status(404)
+      .json({
+        sucess: false,
+        message: "Unauthorized, You have to be admin to assign courses",
+      });
+  }
+  try {
+    const db = await connectToDB();
+    const { staff_id } = req.params;
+    const {
+      staff_name,
+      role,
+      phone,
+      contact_info,
+      profile_link,
+      office_hours,
+      rating,
+      numberOfResearchPapers,
+      specialization,
+      remoteWork,
+    } = req.body;
+
+    // Check if staff exists
+    const staffCheck = await db
+      .request()
+      .query(`SELECT * FROM Staff WHERE staff_id = ${staff_id};`);
+
+    if (staffCheck.recordset.length <= 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Staff member not found" });
     }
-    try {
-        const db = await connectToDB();
-        const {staff_id} = req.params;
-        const {staff_name, role, phone, contact_info, profile_link, office_hours,rating,numberOfResearchPapers,specialization,remoteWork } = req.body;
 
-        // Check if staff exists
-        const staffCheck = await db.request().query(`SELECT * FROM Staff WHERE staff_id = ${staff_id};`);
+    // Validate required fields
+    if (!staff_name || !role) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Staff name and role are required" });
+    }
 
-        if (staffCheck.recordset.length <= 0) {
-            return res.status(404).json({ success: false, message: "Staff member not found" });
-        }
+    // Validate role
+    const validRoles = ["TA", "Doctor", "admin", "super_admin"];
+    if (!validRoles.includes(role)) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Invalid role. Must be TA, Doctor, admin, or super_admin",
+        });
+    }
 
-        // Validate required fields
-        if (!staff_name || !role) {
-            return res.status(400).json({ success: false, message: "Staff name and role are required" });
-        }
+    // Build the update query dynamically based on provided fields
+    let updateFields = [];
 
-        // Validate role
-        const validRoles = ['TA', 'Doctor', 'admin', 'super_admin'];
-        if (!validRoles.includes(role)) {
-            return res.status(400).json({ success: false, message: "Invalid role. Must be TA, Doctor, admin, or super_admin" });
-        }
+    if (staff_name) {
+      updateFields.push(`staff_name = '${staff_name}'`);
+    }
 
-        // Build the update query dynamically based on provided fields
-        let updateFields = [];
+    if (role) {
+      updateFields.push(`role = '${role}'`);
+    }
 
-        if (staff_name) {
-            updateFields.push(`staff_name = '${staff_name}'`);
-        }
-        
-        if (role) {
-            updateFields.push(`role = '${role}'`);
-        }
-        
-        if (phone !== undefined) {
-            updateFields.push(`phone = '${phone}'`);
-        }
-        
-        if (contact_info !== undefined) {
-            updateFields.push(`contact_info = '${contact_info}'`);
-        }
-        
-        if (profile_link !== undefined) {
-            updateFields.push(`profile_link = '${profile_link}'`);
-        }
-        
-        if (office_hours !== undefined) {
-            updateFields.push(`office_hours = '${office_hours}'`);
-        }
+    if (phone !== undefined) {
+      updateFields.push(`phone = '${phone}'`);
+    }
 
-        if (updateFields.length === 0) {
-            return res.status(400).json({ success: false, message: "No fields to update" });
-        }
+    if (contact_info !== undefined) {
+      updateFields.push(`contact_info = '${contact_info}'`);
+    }
 
-        const q = `UPDATE Staff SET ${updateFields.join(', ')} WHERE staff_id = ${staff_id}`;
+    if (profile_link !== undefined) {
+      updateFields.push(`profile_link = '${profile_link}'`);
+    }
 
-        await db.request().query(q);
+    if (office_hours !== undefined) {
+      updateFields.push(`office_hours = '${office_hours}'`);
+    }
 
+    if (updateFields.length === 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No fields to update" });
+    }
 
+    const q = `UPDATE Staff SET ${updateFields.join(
+      ", "
+    )} WHERE staff_id = ${staff_id}`;
 
-        const attrResult = await db.request().query(`
+    await db.request().query(q);
+
+    const attrResult = await db.request().query(`
     SELECT attribute_id, attribute_name
     FROM StaffAttributes
     WHERE attribute_name IN (
@@ -165,27 +259,42 @@ exports.editStaff = async (req, res) => {
     )
 `);
 
-const attributes = {};
-attrResult.recordset.forEach(a => {
-    attributes[a.attribute_name] = a.attribute_id;
-});
+    const attributes = {};
+    attrResult.recordset.forEach((a) => {
+      attributes[a.attribute_name] = a.attribute_id;
+    });
 
-const eavData = [
-    { name: 'rating', value: rating, column: 'value_int', type: sql.Int },
-    { name: 'numberOfResearchPapers', value: numberOfResearchPapers, column: 'value_int', type: sql.Int },
-    { name: 'specialization', value: specialization, column: 'value_string', type: sql.VarChar },
-    { name: 'remoteWork', value: remoteWork, column: 'value_boolean', type: sql.Bit }
-];
+    const eavData = [
+      { name: "rating", value: rating, column: "value_int", type: sql.Int },
+      {
+        name: "numberOfResearchPapers",
+        value: numberOfResearchPapers,
+        column: "value_int",
+        type: sql.Int,
+      },
+      {
+        name: "specialization",
+        value: specialization,
+        column: "value_string",
+        type: sql.VarChar,
+      },
+      {
+        name: "remoteWork",
+        value: remoteWork,
+        column: "value_boolean",
+        type: sql.Bit,
+      },
+    ];
 
-for (const attr of eavData) {
-    if (attr.value === undefined) continue;
+    for (const attr of eavData) {
+      if (attr.value === undefined) continue;
 
-    const request = db.request();
-    request.input('staff_id', sql.Int, staff_id);
-    request.input('attribute_id', sql.Int, attributes[attr.name]);
-    request.input('val', attr.type, attr.value);
+      const request = db.request();
+      request.input("staff_id", sql.Int, staff_id);
+      request.input("attribute_id", sql.Int, attributes[attr.name]);
+      request.input("val", attr.type, attr.value);
 
-    await request.query(`
+      await request.query(`
         IF EXISTS (
             SELECT 1 FROM StaffAttributeValues
             WHERE staff_id = @staff_id AND attribute_id = @attribute_id
@@ -197,70 +306,77 @@ for (const attr of eavData) {
             INSERT INTO StaffAttributeValues (staff_id, attribute_id, ${attr.column})
             VALUES (@staff_id, @attribute_id, @val)
     `);
-}
-
-
-
-
-        return res.status(200).json({ success: true, message: "Staff information updated successfully" });
-
-    } catch (err) {
-        console.log(err);
-        return res.status(500).json({ success: false, message: "Error while updating staff information" });
     }
-}
+
+    return res
+      .status(200)
+      .json({
+        success: true,
+        message: "Staff information updated successfully",
+      });
+  } catch (err) {
+    console.log(err);
+    return res
+      .status(500)
+      .json({
+        success: false,
+        message: "Error while updating staff information",
+      });
+  }
+};
 
 exports.editStaffGet = (req, res) => {
-    res.render('editStaffPage');
-}
+  res.render("editStaffPage");
+};
 
-exports.RemoveStaff = async (req,res)=>{
-   try{
+exports.RemoveStaff = async (req, res) => {
+  try {
     const db = await connectToDB();
-    const {staff_id} = req.params;
-    if(req.userInfo.role != 'admin' && req.userInfo.role != 'super_admin'){
-        return res.status(403).json({success:false, message:`Unuathorized `})
+    const { staff_id } = req.params;
+    if (req.userInfo.role != "admin" && req.userInfo.role != "super_admin") {
+      return res.status(403).json({ success: false, message: `Unuathorized ` });
     }
 
     const delrequest = await db.request();
     const q = `delete from Staff where staff_id = @staff_id`;
-    delrequest.input('staff_id', sql.Int, staff_id)
+    delrequest.input("staff_id", sql.Int, staff_id);
     await delrequest.query(q);
 
-    return res.status(200).json({ success: true, message: "staff deleted successfuly " });
-
-
-   }catch (err) {
-        console.log(err);
-        return res.status(500).json({ success: false, message: "Error while deleting staff " });
-    }
-
-
-}
+    return res
+      .status(200)
+      .json({ success: true, message: "staff deleted successfuly " });
+  } catch (err) {
+    console.log(err);
+    return res
+      .status(500)
+      .json({ success: false, message: "Error while deleting staff " });
+  }
+};
 
 exports.addStuInfo = async (req, res) => {
   try {
-    if(req.userInfo.role !== 'admin' && req.userInfo.role !='super_admin'){
-      return res.status(403).json({ success: false, message: 'Unauthorized !' });
+    if (req.userInfo.role !== "admin" && req.userInfo.role != "super_admin") {
+      return res
+        .status(403)
+        .json({ success: false, message: "Unauthorized !" });
     }
     const db = await connectToDB();
     const { stu_id } = req.params;
     const attributes = req.body;
 
-
-    const stuCheck = await db.request()
-      .input('stu_id', sql.Int, stu_id)
-      .query('SELECT stu_id FROM Student WHERE stu_id = @stu_id');
+    const stuCheck = await db
+      .request()
+      .input("stu_id", sql.Int, stu_id)
+      .query("SELECT stu_id FROM Student WHERE stu_id = @stu_id");
 
     if (stuCheck.recordset.length === 0) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Student not found" });
     }
 
-
     for (const [attrName, attrValue] of Object.entries(attributes)) {
-
-      const attrResult = await db.request()
-        .input('name', sql.VarChar, attrName)
+      const attrResult = await db.request().input("name", sql.VarChar, attrName)
         .query(`
           SELECT attribute_id, data_type 
           FROM StudentAttributes 
@@ -275,31 +391,35 @@ exports.addStuInfo = async (req, res) => {
         value_string: null,
         value_int: null,
         value_decimal: null,
-        value_boolean: null
+        value_boolean: null,
       };
 
       switch (data_type) {
-        case 'string':
+        case "string":
           valueColumns.value_string = attrValue;
           break;
-        case 'integer':
+        case "integer":
           valueColumns.value_int = attrValue;
           break;
-        case 'decimal':
+        case "decimal":
           valueColumns.value_decimal = attrValue;
           break;
-        case 'boolean':
+        case "boolean":
           valueColumns.value_boolean = attrValue;
           break;
       }
 
       const request = db.request();
-      request.input('stu_id', sql.Int, stu_id);
-      request.input('attribute_id', sql.Int, attribute_id);
-      request.input('value_string', sql.VarChar, valueColumns.value_string);
-      request.input('value_int', sql.Int, valueColumns.value_int);
-      request.input('value_decimal', sql.Decimal(10,2), valueColumns.value_decimal);
-      request.input('value_boolean', sql.Bit, valueColumns.value_boolean);
+      request.input("stu_id", sql.Int, stu_id);
+      request.input("attribute_id", sql.Int, attribute_id);
+      request.input("value_string", sql.VarChar, valueColumns.value_string);
+      request.input("value_int", sql.Int, valueColumns.value_int);
+      request.input(
+        "value_decimal",
+        sql.Decimal(10, 2),
+        valueColumns.value_decimal
+      );
+      request.input("value_boolean", sql.Bit, valueColumns.value_boolean);
 
       await request.query(`
         IF EXISTS (
@@ -323,14 +443,13 @@ exports.addStuInfo = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Student attributes updated successfully (EAV)'
+      message: "Student attributes updated successfully (EAV)",
     });
-
   } catch (err) {
     console.log(err);
     return res.status(500).json({
       success: false,
-      message: 'Error while updating student attributes'
+      message: "Error while updating student attributes",
     });
   }
 };

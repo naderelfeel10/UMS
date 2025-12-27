@@ -48,6 +48,7 @@ route.get("/gradeCourse",middleware.authMiddleWare,CourseCountroller.gradeCourse
 //EAV
 route.post('/addClassworkGrades/:course_id/:stu_id', middleware.authMiddleWare, CourseCountroller.addClassworkGrades)
 route.get('/getClassworkGrades/:course_id/:stu_id', middleware.authMiddleWare, CourseCountroller.getCourseClassworkGrades)
+route.get('/getClassworkGrades/:course_id', middleware.authMiddleWare, CourseCountroller.getCourseClassworkGrades)
 
 
 

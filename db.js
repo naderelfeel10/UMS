@@ -1,13 +1,10 @@
-const sql = require('mssql/msnodesqlv8');
+const sql = require('mssql');
+
 
 const config = {
-  user: 'ums_user',
-  password: 'ums1234',
-  server: 'localhost\\SQLEXPRESS',
-  database: 'University_Management_System_DB',
+  connectionString: 'Driver={ODBC Driver 17 for SQL Server};Server=ABO7EDAR;Database=UMS;Trusted_Connection=Yes;',
   options: {
-    encrypt: false,
-    trustServerCertificate: true
+    encrypt: false
   }
 };
 

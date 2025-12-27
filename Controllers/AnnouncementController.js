@@ -180,32 +180,58 @@ exports.getCourseAnnouncements = async(req,res)=>{
                         s.staff_email,
                         a.ann_title,
                         a.ann_content,
-                        STRING_AGG(c.comment_content, ' | ') AS comments
+                        a.ann_id,
+                        s.staff_id,
+                        JSON_QUERY((
+                            SELECT 
+                                c.comment_id,
+                                c.ann_id,
+                                c.commenter_id,
+                                c.comment_content,
+                                s.stu_name,
+                                s.stu_email,
+                                s.stu_id
+                            FROM Comment c
+                            JOIN Student s
+                                ON c.commenter_id = s.stu_id
+                            WHERE c.ann_id = a.ann_id
+                            FOR JSON PATH
+                        )) AS comments
                         FROM Announcement a
                         JOIN Staff s 
                             ON a.staff_id = s.staff_id
-                        LEFT JOIN Comment c
-                            ON c.ann_id = a.ann_id
+                        WHERE a.course_id = @course_id
                         GROUP BY 
                             s.staff_name,
                             s.staff_email,
+                            s.staff_id,
                             a.ann_title,
-                            a.ann_content;`;
-
+                            a.ann_content,
+                            a.ann_id;`;
 
         request.input('course_id', sql.Int, course_id);
-        const result  = await request.query(q);
+        const result = await request.query(q);
 
-        return res.status(200).json({success:true, message:`course announcements`, result:result.recordset})
+        const announcements = result.recordset.map(ann => {
+            return {
+                ...ann,
+                comments: ann.comments ? JSON.parse(ann.comments) : []
+            };
+        });
 
-        
+        return res.status(200).json({
+            success: true, 
+            message: "course announcements", 
+            result: announcements
+        });
 
-
-    }catch(err){
+    } catch(err) {
         console.log(err)
-        res.status(500).json({success:fa4lse, message:"error while getting course announcements !!"})
+        res.status(500).json({
+            success: false, 
+            message: "error while getting course announcements !!"
+        })
     }
-
 }
 
 
@@ -278,11 +304,12 @@ exports.EditAnnouncementComment = async(req,res)=>{
 
      
     if(author_id === result.recordset[0].commenter_id ){
-        const q =  `update Comment set comment_content = @comment_content where ann_id = @ann_id  and commenter_id = @commenter_id`;
+        const q =  `update Comment set comment_content = @comment_content where ann_id = @ann_id  and commenter_id = @commenter_id and comment_id = @comment_id`;
         const request = await db.request()
         request.input("commenter_id", sql.Int, author_id );
         request.input("ann_id", sql.Int, ann_id );
         request.input("comment_content", sql.VarChar, content);
+        request.input('comment_id',sql.Int, comment_id)
         
         
         await request.query(q);

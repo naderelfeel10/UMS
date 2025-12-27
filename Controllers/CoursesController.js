@@ -3,28 +3,70 @@ const sql = require("mssql");
 const multer = require('multer');
 
 
-exports.addCourse =async (req,res)=>{
-    if(req.userInfo.role != 'admin' )
-    {
-        return res.status(404).json({sucess:false, message:"Unauthorized, You have to be admin or doctor to add courses"})
+exports.addCourse = async (req, res) => {
+    if (req.userInfo.role != 'admin') {
+        return res.status(403).json({ success: false, message: "Unauthorized, You have to be admin to add courses" });
     }
+
     const db = await connectToDB();
-    const{course_name, credit_hours } = req.body;
+    const { course_name, credit_hours } = req.body;
+    const sql = require('mssql');
 
-    if(credit_hours !=2 && credit_hours != 3 && credit_hours != 4){
-        return res.status(401).json({sucess:false, message:"course credit hours should be 2 or 3 or 4"})
+    if (credit_hours != 2 && credit_hours != 3 && credit_hours != 4) {
+        return res.status(400).json({ success: false, message: "Course credit hours should be 2, 3, or 4" });
     }
-    const q = `insert into Course (course_name, credit_hours) values (@name, @hours)`;
 
-    const request = await db.request();
-    request.input("name", sql.VarChar, course_name);
-    request.input("hours", sql.Int, credit_hours);
-    await request.query(q);
+    try {
+        // First, get the maximum course_id from the Course table
+        const getMaxIdQuery = `SELECT ISNULL(MAX(course_id), 0) as max_id FROM Course`;
+        const maxIdResult = await db.request().query(getMaxIdQuery);
+        const maxId = maxIdResult.recordset[0].max_id;
+        
+        // Calculate the next course_id
+        const nextCourseId = maxId + 1;
 
-    return res.status(201).json({success:true, message:`${course_name} course added successfully`})
-    
-}
+        // Insert the new course with the calculated course_id
+        const insertQuery = `INSERT INTO Course (course_id, course_name, credit_hours) VALUES (@id, @name, @hours)`;
+        
+        const request = db.request();
+        request.input("id", sql.Int, nextCourseId);
+        request.input("name", sql.VarChar, course_name);
+        request.input("hours", sql.Int, credit_hours);
+        
+        await request.query(insertQuery);
 
+        return res.status(201).json({ 
+            success: true, 
+            message: `${course_name} course added successfully`,
+            course_id: nextCourseId 
+        });
+
+    } catch (error) {
+        console.error("Error adding course:", error);
+        
+        // Handle duplicate course name error
+        if (error.number === 2627 || error.code === 'EREQUEST') { // Primary key or unique constraint violation
+            if (error.message.includes('course_name')) {
+                return res.status(409).json({ 
+                    success: false, 
+                    message: `Course with name "${course_name}" already exists` 
+                });
+            } else if (error.message.includes('course_id')) {
+                // If course_id collision happens (rare), retry with a new id
+                return res.status(500).json({ 
+                    success: false, 
+                    message: "Course ID conflict, please try again" 
+                });
+            }
+        }
+        
+        return res.status(500).json({ 
+            success: false, 
+            message: "Internal server error", 
+            error: error.message 
+        });
+    }
+};
 exports.addCourseGet = (req,res)=>{
     res.render('addCoursePage');
 }
@@ -1025,72 +1067,139 @@ exports.getCourseClassworkGrades = async(req,res)=>{
    
     try{
         const db = await connectToDB();
-        const {course_id,stu_id} = req.params;
+        const {course_id, stu_id} = req.params;
 
+        const courseCheck = await db.request()
+            .input('course_id', sql.Int, course_id)
+            .query('SELECT course_id FROM Course WHERE course_id = @course_id');
 
-    const courseCheck = await db.request()
-      .input('course_id', sql.Int, course_id)
-      .query('SELECT course_id FROM Course WHERE course_id = @course_id');
+        if (courseCheck.recordset.length === 0) {
+            return res.status(404).json({ success: false, message: 'Course not found' });
+        }
 
-    if (courseCheck.recordset.length === 0) {
-      return res.status(404).json({ success: false, message: 'Course not found' });
-    }
+        if (stu_id) {
+            // SINGLE STUDEND CODE
+            const stuCheck = await db.request()
+                .input('stu_id', sql.Int, stu_id)
+                .query('SELECT stu_id FROM Student WHERE stu_id = @stu_id');
 
-    const stuCheck = await db.request()
-      .input('stu_id', sql.Int, stu_id)
-      .query('SELECT stu_id FROM Student WHERE stu_id = @stu_id');
+            if (stuCheck.recordset.length === 0) {
+                return res.status(404).json({ success: false, message: 'Student not found' });
+            }
 
-    if (stuCheck.recordset.length === 0) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
-    }
+            const gradesRequest = await db.request()
+                .input('course_id', sql.Int, course_id)
+                .input('stu_id', sql.Int, stu_id)
+                .query(`
+                    SELECT 
+                        rca.attribute_name,
+                        rcav.value_int,
+                        rcav.value_decimal,
+                        rcav.value_string,
+                        rcav.value_boolean,
+                        rc.grade
+                    FROM RegisteredCourseAttributeValue rcav
+                    INNER JOIN RegisteredCourseAttribute rca
+                        ON rcav.attribute_id = rca.attribute_id
+                    INNER JOIN RegisteredCourses rc
+                        ON rcav.course_id = rc.course_id 
+                        AND rcav.stu_id = rc.stu_id
+                    WHERE rcav.course_id = @course_id
+                    AND rcav.stu_id = @stu_id;
+                `);
 
-    const gradesRequest = await db.request()
-      .input('course_id', sql.Int, course_id)
-      .input('stu_id', sql.Int, stu_id)
+            const grades = {};
+            gradesRequest.recordset.forEach(r => {
+                if (r.value_int !== null) grades[r.attribute_name] = r.value_int;
+                else if (r.value_decimal !== null) grades[r.attribute_name] = r.value_decimal;
+                else if (r.value_string !== null) grades[r.attribute_name] = r.value_string;
+                else if (r.value_boolean !== null) grades[r.attribute_name] = r.value_boolean;
+            });
 
-      .query(`
-    SELECT 
-        rca.attribute_name,
-        rcav.value_int,
-        rcav.value_decimal,
-        rcav.value_string,
-        rcav.value_boolean,
-        rc.grade
-    FROM RegisteredCourseAttributeValue rcav
-    INNER JOIN RegisteredCourseAttribute rca
-        ON rcav.attribute_id = rca.attribute_id
-    INNER JOIN RegisteredCourses rc
-        ON rcav.course_id = rc.course_id 
-        AND rcav.stu_id = rc.stu_id
-    WHERE rcav.course_id = @course_id
-      AND rcav.stu_id = @stu_id;
+            grades["final_grade"] = gradesRequest.recordset[0]?.grade || "-";
 
-      `);
+            return res.status(200).json({
+                success: true,
+                student: { stu_id },
+                course: { course_id },
+                grades: grades
+            });
+        } 
+        else {
+            const result = await db.request()
+                .input('course_id', sql.Int, course_id)
+                .query(`
+                    WITH StudentGrades AS (
+                        SELECT 
+                            s.stu_id,
+                            s.stu_name,
+                            s.stu_email,
+                            rc.grade as final_grade,
+                            rca.attribute_name,
+                            rcav.value_int,
+                            rcav.value_decimal,
+                            rcav.value_string,
+                            rcav.value_boolean
+                        FROM Student s
+                        INNER JOIN RegisteredCourses rc ON s.stu_id = rc.stu_id
+                        LEFT JOIN RegisteredCourseAttributeValue rcav 
+                            ON rcav.course_id = rc.course_id 
+                            AND rcav.stu_id = rc.stu_id
+                        LEFT JOIN RegisteredCourseAttribute rca
+                            ON rcav.attribute_id = rca.attribute_id
+                        WHERE rc.course_id = @course_id
+                    )
+                    SELECT * FROM StudentGrades
+                    ORDER BY stu_name, attribute_name
+                `);
 
-    const grades = {};
-    gradesRequest.recordset.forEach(r => {
-        if (r.value_int !== null) grades[r.attribute_name] = r.value_int;
-        else if (r.value_decimal !== null) grades[r.attribute_name] = r.value_decimal;
-        else if (r.value_string !== null) grades[r.attribute_name] = r.value_string;
-        else if (r.value_boolean !== null) grades[r.attribute_name] = r.value_boolean;
-    });
+            if (result.recordset.length === 0) {
+                return res.status(200).json({
+                    success: true,
+                    course: { course_id },
+                    students: []
+                });
+            }
 
-    grades["final_grade"] = gradesRequest.recordset[0]?.grade || "-";
+            const studentsMap = new Map();
+            
+            result.recordset.forEach(row => {
+                const studentId = row.stu_id;
+                
+                if (!studentsMap.has(studentId)) {
+                    studentsMap.set(studentId, {
+                        stu_id: studentId,
+                        stu_name: row.stu_name,
+                        stu_email: row.stu_email,
+                        grades: {
+                            final_grade: row.final_grade || "-"
+                        }
+                    });
+                }
+                
+                if (row.attribute_name) {
+                    const student = studentsMap.get(studentId);
+                    if (row.value_int !== null) student.grades[row.attribute_name] = row.value_int;
+                    else if (row.value_decimal !== null) student.grades[row.attribute_name] = row.value_decimal;
+                    else if (row.value_string !== null) student.grades[row.attribute_name] = row.value_string;
+                    else if (row.value_boolean !== null) student.grades[row.attribute_name] = row.value_boolean;
+                }
+            });
 
-    res.status(200).json({
-        success: true,
-        student: { stu_id },
-        course: { course_id },
-        grades
-    });
+            const students = Array.from(studentsMap.values());
 
-}
-  catch (err) {
-            console.error(err);
-            return res.status(500).json({ 
-                success: false, 
-                message: "Error retrieving getting  grades of the course" 
+            return res.status(200).json({
+                success: true,
+                course: { course_id },
+                students: students
             });
         }
 
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ 
+            success: false, 
+            message: "Error retrieving course grades" 
+        });
+    }
 }
