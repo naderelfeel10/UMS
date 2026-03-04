@@ -1,6 +1,7 @@
 const express = require('express')
 const cookieParser = require('cookie-parser');
 const bodyParser = require("body-parser");
+require("dotenv").config();
 const connectToDB = require('./config/db.js');
 
 const StudentTable = require('./models/Student.js')
