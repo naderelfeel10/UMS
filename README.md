@@ -1,133 +1,124 @@
-# University Management System — Backend API
+# University Management System (Agile Software Engineering Project)
 
-A RESTful backend API for the University Management System, built with **Express.js** and **Microsoft SQL Server**. Fully documented with Swagger UI and structured around role-based access for Admins, Doctors, TAs, and Students. With protected endpoints through jwt auth.
+## Project Overview
+This project implements a **University Management System (UMS)** developed using the **Scrum framework**.  
+The system provides a centralized, modular platform to manage academic, administrative, and community-related processes within a university.
 
----
-
-## Tech Stack
-
-- **Runtime:** Node.js
-- **Framework:** Express.js
-- **Database:** Microsoft SQL Server (MSSQL)
-- **API Docs:** Swagger UI (OAS 3.0)
-- **Auth:** Cookie-based JWT with OTP email verification
+The solution is built incrementally through multiple sprints, following agile best practices, with continuous backlog refinement and change anticipation.
 
 ---
 
-## Swagger UI Screenshots
-
-### Overview — All Endpoint Groups
-![alt text](./screenshots/image.png)
----
-
-### Authentication & OTP Endpoints
-![alt text](./screenshots/image-1.png)
+## Agile Methodology
+- **Framework:** Scrum
+- **Artifacts:** Product Backlog, Sprint Backlogs, Increment
+- **Tools:** Jira (Backlog & Sprint tracking), GitHub (Version Control)
+- **Approach:** Iterative development with frequent delivery of working features
 
 ---
 
-### Course Management Endpoints
-![alt text](./screenshots/image-2.png)
+## System Architecture
+- **Backend:** Node.js + Express
+- **Database:** SQL Server
+- **Architecture Style:** Modular / Layered Architecture
+- **Data Modeling:** Relational schema with **EAV (Entity–Attribute–Value)** model support
+- **Version Control:** Git / GitHub
 
 ---
 
-### Staff Management Endpoints
-![alt text](./screenshots/image-3.png)
+## Modules
+
+### 1. Facilities Module
+Handles physical and digital infrastructure management:
+- Classroom and laboratory scheduling
+- Room availability and reservations
+- Maintenance issue tracking
+- Administrative office automation
+- Resource allocation (equipment, licenses)
 
 ---
 
-### Quizzes & Grading Endpoints
-![alt text](./screenshots/image-4.png)
----
-
-### Announcements & Questionnaire Endpoints
-![alt text](./screenshots/image-5.png)
----
-
-## Key Features
-
-### JWT Auth
-New users are added in bulk by admins.They can login through their credentials. All endpoints are protected through role based access verified by jwt bearer tokens.
-
-### EAV Pattern for Flexible Grading
-Classwork grades and staff/student attributes use the **Entity-Attribute-Value** pattern, allowing dynamic, schema-flexible grading (assignments, participation, lab work, etc.) without database migrations.
-
-### Quiz Scheduling via EAV
-Quizzes can be published with custom schedule settings stored using the EAV pattern — giving instructors full control over timing and availability.
-
-### Student Quiz Calendar
-A dedicated endpoint aggregates all upcoming quizzes for a logged-in student into a calendar view, consumed directly by the frontend.
-
-### Multi-layer Grading
-The API supports quiz-level grading (`gradeQuiz`), classwork/EAV grading (`addClassworkGrades`), and overall course grading (`gradeCourse`) as separate concerns, giving instructors granular control.
+### 2. Curriculum Module
+Manages academic structure and delivery:
+- Core and elective course management
+- Course catalog and enrollment rules
+- LMS integration for assignments and content
+- Assessment creation and grading
+- Secure grade and feedback access
 
 ---
 
-## API Endpoint Groups
-
-| Tag | Base Path | Responsibility |
-|-----|-----------|---------------|
-| **Authentication** | `/api/auth` | Login, logout, bulk user creation |
-| **OTP** | `/api/auth` | Email OTP send & verify for account activation |
-| **Courses** | `/course_management` | CRUD, registration, assignment, content upload |
-| **EAV Grades** | `/course_management` | Flexible classwork grading via EAV |
-| **Quizzes** | `/course_management/quizzes` | Add, publish, grade, and fetch quizzes |
-| **Staff Management** | `/Staff_management` | CRUD staff, fetch assigned courses |
-| **Student EAV** | `/Staff_management` | Dynamic student attribute management |
-| **Announcements** | `/announcemnts` | Create, edit, delete, and fetch announcements |
-| **Comments** | `/announcemnts` | Comment threads on announcements |
-| **Questionnaire** | `/questionnaire` | Course questionnaire questions |
+### 3. Staff Module
+Manages academic and administrative staff:
+- Professor and TA profiles
+- Course assignments and office hours
+- Performance tracking
+- Research publication records
+- HR and payroll integration
+- Leave and benefits management
 
 ---
 
-## Getting Started
-
-### Prerequisites
-- Node.js 18+
-- Microsoft SQL Server (local or remote)
-- npm / yarn
-
-### Installation
-
-```bash
-# Clone the repository
-git clone repo-url
-
-# Install dependencies
-npm install
-
-# Set up environment variables
-cp .env.example .env
-
-# run the server
-nodemon index.js
-```
-
-
-The server will start at `http://localhost:3001`.  
-Swagger docs are available at `http://localhost:3001/api-docs`.
+### 4. Community Module
+Enhances communication across stakeholders:
+- Parent–teacher communication portal
+- Student–staff messaging system
+- University-wide announcements
+- Events and deadline notifications
 
 ---
 
-## API Documentation
-
-This API is documented using **Swagger UI (OAS 3.0)**.
-
-Once the server is running, visit:
-
-```
-http://localhost:3001/api-docs
-```
-
-All endpoints are grouped by feature and include request/response schemas, required parameters, and authentication requirements.
+## Database Design
+- Fully normalized relational schema
+- Strong use of **foreign keys** with cascade rules
+- **EAV Model** implemented for flexible, extensible attributes
+- Change anticipation supported in schema design
+- Referential integrity enforced across all modules
 
 ---
 
-## Database
+## EAV Model Usage
+The Entity–Attribute–Value pattern is used to:
+- Dynamically extend entities without schema changes
+- Support configurable attributes per course or resource
+- Maintain scalability and flexibility
 
-- **Engine:** Microsoft SQL Server
-- **Pattern:** Relational schema with EAV extensions for flexible attributes
-- **EAV usage:** Classwork grades, quiz schedule settings, student/staff dynamic attributes
+---
 
-### ERD
-![alt text](./screenshots/image-6.png)
+## Backlog Management
+- Complete product backlog covering all modules
+- Backlog items distributed across sprints
+- Change anticipation handled at:
+  - Backlog level
+  - Database architecture level
+- All backlog items tracked and managed using **Jira**
 
+---
+
+## Git Workflow
+- Feature-based branching strategy
+- Frequent commits with meaningful messages
+- Pull before push to avoid conflicts
+- Centralized GitHub repository for collaboration
+
+---
+
+## Evaluation Coverage
+- ✔ GitHub repository with full implementation
+- ✔ Complete backlog for all sprints
+- ✔ Change anticipation in backlog and database design
+- ✔ Full implementation of functional requirements
+- ✔ EAV model implementation
+- ✔ Jira integration for backlog items
+- ✔ Team-based collaborative development
+
+---
+
+## Teamwork
+- Distributed responsibilities across modules
+- Code reviews and shared ownership
+- Agile ceremonies followed (Sprint Planning, Review, Retrospective)
+
+---
+
+## License
+This project is developed for academic purposes as part of the Agile Software Engineering course.
