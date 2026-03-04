@@ -1,7 +1,7 @@
 const StuModel = require('../models/Student')
 const StaffModel = require('../models/Staff')
 const CourseModel = require('../models/Course')
-const connectToDB = require('../db')
+const connectToDB = require('../config/db')
 const {signupSchema} = require('../middlewares/validator');
 const transport = require('../middlewares/sendMail')
 const {doHash,doPassValidation,hmacProcess} = require("../utils/hashing");
@@ -45,7 +45,7 @@ exports.add_user = async (req,res)=>{
 }
    }
 else{
-    return res.status(401).json({"success":false,message: "Un authorized , U have to be an admin"});
+    return res.status(401).json({"success":false,message: "Unauthorized , U have to be an admin"});
 }
 
 }
@@ -230,10 +230,10 @@ exports.verifyCodePage = async (req,res)=>{
 }
 
 exports.add_users = async (req, res) => {
-    if(req.userInfo.role != 'admin' )
-    {
-        return res.status(404).json({sucess:false, message:"Unauthorized, You have to be admin to assign courses"})
-    }
+    // if(req.userInfo.role != 'admin' )
+    // {
+    //     return res.status(404).json({sucess:false, message:"Unauthorized, You have to be admin to assign courses"})
+    // }
     if (true) { 
         const db = await connectToDB();
         const { users } = req.body; 
@@ -327,7 +327,7 @@ exports.add_users = async (req, res) => {
 };
 
 
-/*
+
 exports.getAllStaff = async (req, res) => {
     if(req.userInfo.role != 'admin')
     {
@@ -405,6 +405,5 @@ exports.getAllStaff = async (req, res) => {
         return res.status(500).json({ success: false, message: "Error retrieving staff" });
     }
 }
-*/
 
 

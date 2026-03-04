@@ -1,7 +1,8 @@
 const express = require('express')
 const cookieParser = require('cookie-parser');
 const bodyParser = require("body-parser");
-const connectToDB = require('./db');
+require("dotenv").config();
+const connectToDB = require('./config/db.js');
 
 const StudentTable = require('./models/Student.js')
 const StaffTable = require('./models/Staff.js')
@@ -9,6 +10,8 @@ const CourseTable = require('./models/Course.js')
 const QuizTable = require('./models/Quiz.js')
 const AnnouncementTable = require('./models/Announcement.js')
 const QuestionareTable = require('./models/Questionare.js')
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./config/swagger");
 
 
 
@@ -91,7 +94,7 @@ app.use('/course_management/quizzes',quizrouter)
 app.use('/Staff_management', staffrouter)
 app.use('/announcemnts', announcementsrouter)
 app.use('/questionnaire', questionnairesrouter)
-
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 
 
