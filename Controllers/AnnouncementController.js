@@ -1,4 +1,4 @@
-const connectToDB = require('../db')
+const connectToDB = require('../config/db')
 const sql = require('mssql/msnodesqlv8')
 
 
